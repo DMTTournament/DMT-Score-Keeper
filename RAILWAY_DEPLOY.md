@@ -37,12 +37,13 @@ In Railway dashboard, go to your project and click "Variables":
 **Required Variables:**
 ```
 DISCORD_TOKEN=your_discord_bot_token_here
-CRCON_API_KEY=your_crcon_api_key_here
+RCON_HOST=your_game_server_ip
+RCON_PORT=your_rcon_port
+RCON_PASSWORD=your_rcon_password
 ```
 
 **Recommended Variables:**
 ```
-CRCON_URL=http://your-server-ip:8010
 BOT_AUTHOR=YourCommunityName
 ADMIN_ROLE_NAME=admin
 ```
@@ -60,34 +61,24 @@ Railway will automatically build and deploy your bot!
 4. **Copy the Token**
 5. **Add to Railway as `DISCORD_TOKEN`**
 
-### Getting Your CRCON API Key
+### Getting Your RCON Credentials
 
-1. **Open your CRCON web interface** (usually `http://your-server:8010`)
-2. **Go to Settings/Admin section**
-3. **Find your API Key**
-4. **Add to Railway as `CRCON_API_KEY`**
-
-### Setting Your CRCON URL
-
-Format: `http://your-server-ip:8010`
-
-Examples:
-- `http://123.456.789.012:8010` (IP address)
-- `http://yourserver.example.com:8010` (domain name)
-- `https://yourserver.example.com:8010` (if you have SSL)
-
-**⚠️ Important:** Always include `http://` or `https://`
+Your RCON credentials come from your game server provider:
+- **RCON_HOST** — the server IP address
+- **RCON_PORT** — the RCON port (check your server control panel)
+- **RCON_PASSWORD** — the RCON password set in your server config
 
 ## 🔧 Complete Variable Reference
 
 | Variable | Required | Example | Description |
 |----------|----------|---------|-------------|
 | `DISCORD_TOKEN` | ✅ | `MTIzNDU2...` | Your Discord bot token |
-| `CRCON_API_KEY` | ✅ | `d1c56ecf-...` | Your CRCON API key |
-| `CRCON_URL` | ⚠️ | `http://1.2.3.4:8010` | Your CRCON server URL |
+| `RCON_HOST` | ✅ | `123.456.789.012` | Game server IP address |
+| `RCON_PORT` | ✅ | `7779` | RCON port |
+| `RCON_PASSWORD` | ✅ | `mypassword` | RCON password |
 | `BOT_AUTHOR` | ❌ | `MyTankClan` | Name shown in bot footer |
 | `ADMIN_ROLE_NAME` | ❌ | `admin` | Discord role required to control bot |
-| `CRCON_AUTO_SWITCH` | ❌ | `true` | Auto-switch on point captures |
+| `RCON_AUTO_SWITCH` | ❌ | `true` | Auto-switch on point captures |
 | `UPDATE_INTERVAL` | ❌ | `15` | Update frequency in seconds |
 | `LOG_CHANNEL_ID` | ❌ | `123456789` | Discord channel ID for match logs |
 
@@ -105,11 +96,11 @@ Examples:
 - Check bot permissions in Discord server
 - Ensure bot is invited to your server with correct permissions
 
-**❌ CRCON Connection Failed**
-- Verify `CRCON_URL` format includes `http://`
-- Check that `CRCON_API_KEY` is correct
-- Ensure your CRCON server is accessible from the internet
-- Test CRCON manually: `curl http://your-server:8010/api/get_status`
+**❌ RCON Connection Failed**
+- Verify `RCON_HOST` and `RCON_PORT` are correct
+- Check `RCON_PASSWORD` is valid
+- Ensure the game server is running
+- Use `/rcon_status` in Discord to test the connection
 
 **❌ Permission Denied**
 - Make sure you have the `ADMIN_ROLE_NAME` role in Discord
@@ -126,9 +117,9 @@ Examples:
 ### Testing Your Deployment
 
 1. **Check bot status:** Bot should show as "Online" in Discord
-2. **Test connection:** Use `/crcon_status` command
+2. **Test connection:** Use `/rcon_status` command
 3. **Test clock:** Use `/reverse_clock` command
-4. **Test CRCON:** Click "Test CRCON" button
+4. **Test RCON:** Click "🔗 Test RCON" button
 
 ## 💰 Railway Pricing
 
@@ -167,7 +158,7 @@ Examples:
 - **Set up alerts**
 
 ### Bot Health Checks
-- Use `/crcon_status` to check CRCON connection
+- Use `/rcon_status` to check RCON connection
 - Monitor Discord for bot responsiveness
 - Check Railway logs for errors
 
@@ -176,11 +167,9 @@ Examples:
 ### Railway Support
 - [Railway Documentation](https://docs.railway.app)
 - [Railway Discord](https://discord.gg/railway)
-- [Railway Twitter](https://twitter.com/Railway)
 
 ### Bot Support
 - **GitHub Issues:** [Report bugs here](https://github.com/StoneyRebel/HLL-Tank-Overwatch/issues)
-- **Community Discord:** Join our support server
 - **Documentation:** Check README.md and SETUP.md
 
 ## 🎉 Success!
@@ -188,12 +177,12 @@ Examples:
 Once deployed, your bot should:
 - ✅ Show as "Online" in Discord
 - ✅ Respond to `/reverse_clock` command
-- ✅ Connect to your CRCON server
-- ✅ Track tank battle control times
-- ✅ Send notifications to your game server
+- ✅ Connect to your HLL game server via RCON V2
+- ✅ Track tank battle control times and DMT scores
+- ✅ Send notifications to players in game
 
 **Your HLL Tank Overwatch Bot is now live! 🎯**
 
 ---
 
-**Need help?** Join our Discord community or create a GitHub issue!
+**Need help?** Create a GitHub issue!

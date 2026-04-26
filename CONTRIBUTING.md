@@ -15,7 +15,7 @@ Thank you for your interest in contributing! This project is built for the Hell 
 3. **Set up your environment:**
    ```bash
    cp .env.template .env
-   # Fill in your test bot token and CRCON details
+   # Fill in your test bot token and RCON credentials
    ```
 4. **Install dependencies:**
    ```bash
@@ -66,23 +66,23 @@ For new features:
 - Provide clear user feedback
 - Don't spam the console with debug messages
 
-### CRCON Integration
+### RCON V2 Integration
 - Handle connection failures gracefully
 - Add timeouts to all requests
 - Log important events
-- Don't assume CRCON data format
+- Close connections cleanly when done
 
 ## 🧪 Testing
 
 ### Local Testing
 1. Set up a test Discord server
-2. Use a test CRCON instance or mock the responses
+2. Use a real HLL server or mock the RCON responses
 3. Test all bot commands and edge cases
 4. Verify Railway deployment works
 
 ### Test Scenarios
 - Bot startup with missing environment variables
-- CRCON connection failures
+- RCON connection failures
 - Discord permission issues
 - Auto-switch functionality
 - Match end detection
@@ -105,7 +105,7 @@ For new features:
 ## 🐛 Debugging
 
 ### Common Issues
-- **CRCON API changes:** Game updates may change API responses
+- **RCON protocol changes:** Game updates may change RCON V2 responses
 - **Discord API limits:** Be mindful of rate limits
 - **Time zone handling:** Always use UTC for consistency
 - **Memory usage:** Bot should be lightweight for Railway
@@ -114,7 +114,7 @@ For new features:
 - Use appropriate log levels (INFO, WARNING, ERROR)
 - Log important events but avoid spam
 - Include context in error messages
-- Don't log sensitive information (tokens, API keys)
+- Don't log sensitive information (tokens, passwords)
 
 ## 📋 Pull Request Process
 
@@ -143,7 +143,6 @@ We especially welcome contributions in these areas:
 - Railway deployment improvements
 
 ### Medium Priority
-- Additional CRCON endpoints integration
 - More detailed match statistics
 - Enhanced Discord embed features
 - Multi-language support
@@ -159,23 +158,14 @@ We especially welcome contributions in these areas:
 ### Getting Help
 - **GitHub Issues:** For bugs and feature requests
 - **Discussions:** For questions and community chat
-- **Discord:** Join our community server (link in README)
 
 ### Communication Guidelines
 - Be respectful and constructive
 - Help newcomers to HLL server management
-- Share knowledge about CRCON and Discord bots
 - Focus on improving the HLL community experience
 
 ## 📄 License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
-## 🙏 Recognition
-
-Contributors will be recognized in:
-- README.md contributors section
-- Release notes for significant contributions
-- Community Discord server
 
 Thank you for helping make HLL tank warfare more competitive and fun! 🎯
