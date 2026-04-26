@@ -43,10 +43,11 @@ DEVIL_DAVE_EVENT_ID = os.getenv('DEVIL_DAVE_EVENT_ID', '')  # optional: override
 
 # Constants
 DEFAULT_MATCH_DURATION = 4500  # 1h 15m in seconds
-GAME_END_THRESHOLD = 30  # Stop match when server time is below this
-MESSAGE_TRUNCATE_LENGTH = 1900  # Max length for test messages
-MIN_UPDATE_INTERVAL = 5  # Minimum seconds between updates
-MAX_UPDATE_INTERVAL = 300  # Maximum seconds between updates
+GAME_END_THRESHOLD = 5        # Stop match when server time hits this (seconds)
+FAST_POLL_THRESHOLD = 20      # Switch to 2-second polling within this many seconds of end
+MESSAGE_TRUNCATE_LENGTH = 1900
+MIN_UPDATE_INTERVAL = 5
+MAX_UPDATE_INTERVAL = 300
 
 intents = discord.Intents.default()
 intents.message_content = False
@@ -299,8 +300,9 @@ class ClockState:
         self.last_scores = {'allied': 0, 'axis': 0}
         self.switches = []
         self.last_update = None
-        self._first_update_done = False  # Track if first update completed
-        self._lock = asyncio.Lock()  # Thread safety for time updates
+        self._first_update_done = False
+        self._fast_polling = False
+        self._lock = asyncio.Lock()
 
         # DMT Scoring (always enabled)
         self.tournament_mode = True  # Always use DMT scoring
@@ -545,26 +547,39 @@ class ClockState:
             else:
                 crew_scores.append(highest_score)
 
-        # Calculate combat total: 3 × (sum of all squad highs) + commander
-        combat_total = 3 * sum(crew_scores) + commander_score
+        # 3 × (crew highs + commander) — commander is inside the multiplier
+        combat_total = 3 * (sum(crew_scores) + commander_score)
 
-        # Debug logging to help diagnose score issues
-        logger.debug(f"DMT Calc [{team_key}]: {len(crew_scores)} squads found, highs={crew_scores}, commander={commander_score}, combat_total={combat_total}")
+        logger.debug(f"DMT Calc [{team_key}]: crews={crew_scores}, commander={commander_score}, combat_total={combat_total}")
 
-        # Calculate cap score (time in seconds × 0.5)
+        # Cap score
         cap_seconds = self.total_time('A' if team_key == 'allied' else 'B')
-        cap_score = cap_seconds * 0.5
+        cap_score   = cap_seconds * 0.5
 
-        # Total DMT score
-        total_dmt = combat_total + cap_score
+        # First cap bonus (285) — team that got the first auto/manual switch
+        first_cap_bonus = 0
+        if self.switches:
+            first_team = self.switches[0].get('to_team')
+            if (team_key == 'allied' and first_team == 'A') or (team_key == 'axis' and first_team == 'B'):
+                first_cap_bonus = 285
+
+        # Held mid at end bonus (285) — team currently holding the point
+        held_mid_bonus = 0
+        if self.active:
+            if (team_key == 'allied' and self.active == 'A') or (team_key == 'axis' and self.active == 'B'):
+                held_mid_bonus = 285
+
+        total_dmt = combat_total + cap_score + first_cap_bonus + held_mid_bonus
 
         return {
-            'crew_scores': crew_scores,
-            'commander_score': commander_score,
-            'combat_total': combat_total,
-            'cap_seconds': cap_seconds,
-            'cap_score': cap_score,
-            'total_dmt': total_dmt
+            'crew_scores':      crew_scores,
+            'commander_score':  commander_score,
+            'combat_total':     combat_total,
+            'cap_seconds':      cap_seconds,
+            'cap_score':        cap_score,
+            'first_cap_bonus':  first_cap_bonus,
+            'held_mid_bonus':   held_mid_bonus,
+            'total_dmt':        total_dmt,
         }
 
 def user_is_admin(interaction: discord.Interaction):
@@ -641,9 +656,17 @@ def build_embed(clock: ClockState):
     # Show DMT scores
     dmt_allied = f"**DMT Score: {allied_scores['total_dmt']:,.1f}**\n"
     dmt_allied += f"Combat: {allied_scores['combat_total']:,.0f} | Cap: {allied_scores['cap_score']:,.1f}"
+    if allied_scores['first_cap_bonus']:
+        dmt_allied += f" | First Cap: +285"
+    if allied_scores['held_mid_bonus']:
+        dmt_allied += f" | Held Mid: +285"
 
     dmt_axis = f"**DMT Score: {axis_scores['total_dmt']:,.1f}**\n"
     dmt_axis += f"Combat: {axis_scores['combat_total']:,.0f} | Cap: {axis_scores['cap_score']:,.1f}"
+    if axis_scores['first_cap_bonus']:
+        dmt_axis += f" | First Cap: +285"
+    if axis_scores['held_mid_bonus']:
+        dmt_axis += f" | Held Mid: +285"
 
     embed.add_field(name=f"🏆 {allied_name} DMT", value=dmt_allied, inline=True)
     embed.add_field(name=f"🏆 {axis_name} DMT", value=dmt_axis, inline=True)
@@ -849,6 +872,7 @@ class TimerControls(discord.ui.View):
 
             clock.active = None
             clock.started = False
+            clock._fast_polling = False
 
         # Send final message to game with DMT scores (if enabled)
         if clock.rcon_client and clock.ingame_messages:
@@ -1085,12 +1109,49 @@ def get_update_interval():
         logger.warning(f"Invalid UPDATE_INTERVAL, using default: 15")
         return 15
 
+async def fast_poll_end(channel_id):
+    """Poll every 2 seconds once the match is nearly over, stop at exactly 0."""
+    clock = clocks.get(channel_id)
+    if not clock:
+        return
+    logger.info("Fast poll started — match ending soon")
+    while clock.started and clock._fast_polling:
+        try:
+            if clock.rcon_client:
+                try:
+                    await clock.update_from_game()
+                except Exception as e:
+                    logger.warning(f"Fast poll RCON error: {e}")
+                    await clock.connect_rcon()
+
+            game_info = clock.get_game_info()
+            time_left  = game_info['game_time']
+
+            await safe_edit_message(clock.message, embed=build_embed(clock))
+
+            if game_info['connection_status'] == 'Connected' and time_left <= GAME_END_THRESHOLD:
+                logger.info(f"Fast poll: time={time_left}s — triggering match end")
+                clock._fast_polling = False
+                await auto_stop_match(clock, game_info)
+                return
+        except Exception as e:
+            logger.error(f"Error in fast poll: {e}")
+
+        await asyncio.sleep(2)
+
+    clock._fast_polling = False
+    logger.info("Fast poll stopped")
+
 # Update task - shows in-game time
 @tasks.loop(seconds=get_update_interval())
 async def match_updater(channel_id):
     """Update match display with live game time"""
     clock = clocks.get(channel_id)
     if not clock or not clock.started or not clock.message:
+        return
+
+    # If fast poll is active, let it handle everything
+    if clock._fast_polling:
         return
 
     try:
@@ -1102,11 +1163,14 @@ async def match_updater(channel_id):
                 logger.warning(f"RCON update failed, attempting reconnect: {e}")
                 await clock.connect_rcon()
 
-        # Check if game has ended (time remaining is 0 or very low)
         game_info = clock.get_game_info()
-        if game_info['connection_status'] == 'Connected' and 0 < game_info['game_time'] <= GAME_END_THRESHOLD:
-            logger.info("Game time ended, automatically stopping match")
-            await auto_stop_match(clock, game_info)
+        time_left  = game_info['game_time']
+
+        # Switch to fast polling when close to end
+        if game_info['connection_status'] == 'Connected' and 0 < time_left <= FAST_POLL_THRESHOLD:
+            if not clock._fast_polling:
+                clock._fast_polling = True
+                asyncio.create_task(fast_poll_end(channel_id))
             return
 
         # Update display with current game time
@@ -1131,6 +1195,7 @@ async def auto_stop_match(clock: ClockState, game_info: dict):
 
             clock.active = None
             clock.started = False
+            clock._fast_polling = False
 
         # Send final message to game with DMT scores (if enabled)
         if clock.rcon_client and clock.ingame_messages:
