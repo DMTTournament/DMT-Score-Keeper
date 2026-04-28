@@ -144,7 +144,7 @@ class HLLRconV2Client:
         if resp.get('statusCode', 0) != 200:
             raise ConnectionError(f"RCON login failed: {resp.get('statusMessage')}")
         self.auth_token = resp.get('contentBody', '')
-        logger.info(f"Connected to HLL RCON V2 at {self.host}:{self.port}")
+        logger.info(f"Connected to HLL Server at {self.host}:{self.port}")
 
     async def __aenter__(self):
         await self.connect()
@@ -381,7 +381,7 @@ class ClockState:
             }
 
     async def connect_rcon(self):
-        """Connect to HLL RCON V2 directly."""
+        """Connect to HLL Server directly."""
         try:
             if self.rcon_client:
                 try:
@@ -391,10 +391,10 @@ class ClockState:
 
             self.rcon_client = HLLRconV2Client()
             await self.rcon_client.connect()
-            logger.info("Connected to HLL RCON V2 successfully")
+            logger.info("Connected to HLL Server successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect to HLL RCON V2: {e}")
+            logger.error(f"Failed to connect to HLL Server: {e}")
             self.rcon_client = None
             return False
     
@@ -732,7 +732,7 @@ class StartControls(discord.ui.View):
             if clock.ingame_messages:
                 team_a = clock.team_names['allied']
                 team_b = clock.team_names['axis']
-                start_msg = f"🏆 HLL Tank Overwatch: {team_a} vs {team_b} | DMT Scoring Active | Combat + Cap Time = Total Score"
+                start_msg = f"🏆 DMT Score Keeper: {team_a} vs {team_b} | DMT Scoring Active | Combat + Cap Time = Total Score"
                 await clock.rcon_client.send_message(start_msg)
 
             await interaction.edit_original_response(content="✅ Match started with RCON V2!")
@@ -1072,7 +1072,7 @@ async def log_results(clock: ClockState, game_info: dict):
     if not results_channel:
         return
     
-    embed = discord.Embed(title="🏁 HLL Tank Overwatch Match Complete", color=0x800020)
+    embed = discord.Embed(title="🏁 DMT Score Keeper - Match Complete", color=0x800020)
     embed.add_field(name="🇺🇸 Allies Control Time", value=f"`{clock.format_time(clock.time_a)}`", inline=True)
     embed.add_field(name="🇩🇪 Axis Control Time", value=f"`{clock.format_time(clock.time_b)}`", inline=True)
     
@@ -1277,7 +1277,7 @@ async def auto_stop_match(clock: ClockState, game_info: dict):
         logger.error(f"Error in auto_stop_match: {e}")
 
 # Bot commands
-@bot.tree.command(name="reverse_clock", description="Start the HLL Tank Overwatch time control clock")
+@bot.tree.command(name="reverse_clock", description="Start the DMT Score Keeper")
 async def reverse_clock(interaction: discord.Interaction):
     channel_id = interaction.channel_id
     clocks[channel_id] = ClockState()
@@ -1285,11 +1285,11 @@ async def reverse_clock(interaction: discord.Interaction):
     embed = build_embed(clocks[channel_id])
     view = StartControls(channel_id)
 
-    await interaction.response.send_message("✅ HLL Tank Overwatch clock ready!", ephemeral=True)
+    await interaction.response.send_message("✅ DMT Score Keeper is ready!", ephemeral=True)
     posted_message = await interaction.channel.send(embed=embed, view=view)
     clocks[channel_id].message = posted_message
 
-@bot.tree.command(name="rcon_status", description="Check HLL RCON V2 connection status")
+@bot.tree.command(name="rcon_status", description="Check HLL Server connection status")
 async def rcon_status(interaction: discord.Interaction):
     await interaction.response.defer()
 
@@ -1560,7 +1560,7 @@ async def dmt_scores(interaction: discord.Interaction):
 
 @bot.tree.command(name="help_clock", description="Show help for the time control clock")
 async def help_clock(interaction: discord.Interaction):
-    embed = discord.Embed(title="🎯 HLL Tank Overwatch Clock Help", color=0x0099ff)
+    embed = discord.Embed(title="🎯 DMT Score Keeper Help", color=0x0099ff)
     
     embed.add_field(
         name="📋 Commands",
@@ -1651,13 +1651,13 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         logger.info(f"✅ Synced {len(synced)} slash commands")
-        print(f"🎉 HLL Tank Overwatch Clock ready! Use /reverse_clock to start")
+        print(f"🎉 DMT Score Keeper is ready! Use /reverse_clock to start")
     except Exception as e:
         logger.error(f"❌ Command sync failed: {e}")
 
 # Main execution
 if __name__ == "__main__":
-    print("🚀 Starting HLL Tank Overwatch Bot (RCON V2)...")
+    print("🚀 Starting DMT Score Keeper (RCON V2)...")
 
     # Check for Discord token
     token = os.getenv("DISCORD_TOKEN")
