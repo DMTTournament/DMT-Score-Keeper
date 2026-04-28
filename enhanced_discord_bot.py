@@ -761,60 +761,60 @@ class TimerControls(discord.ui.View):
         super().__init__(timeout=None)
         self.channel_id = channel_id
 
-    @discord.ui.button(label="Allies", style=discord.ButtonStyle.success, emoji="🇺🇸")
-    async def switch_to_a(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._switch_team(interaction, "A")
+  #  @discord.ui.button(label="Allies", style=discord.ButtonStyle.success, emoji="🇺🇸")
+   # async def switch_to_a(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    await self._switch_team(interaction, "A")
 
-    @discord.ui.button(label="Axis", style=discord.ButtonStyle.secondary, emoji="🇩🇪")
-    async def switch_to_b(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._switch_team(interaction, "B")
+  #  @discord.ui.button(label="Axis", style=discord.ButtonStyle.secondary, emoji="🇩🇪")
+   # async def switch_to_b(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    await self._switch_team(interaction, "B")
 
-    @discord.ui.button(label="🤖 Auto", style=discord.ButtonStyle.secondary)
-    async def toggle_auto_switch(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not user_is_admin(interaction):
-            return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
+  #  @discord.ui.button(label="🤖 Auto", style=discord.ButtonStyle.secondary)
+   # async def toggle_auto_switch(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    if not user_is_admin(interaction):
+     #       return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
 
-        clock = clocks[self.channel_id]
-        clock.auto_switch = not clock.auto_switch
+      #  clock = clocks[self.channel_id]
+       # clock.auto_switch = not clock.auto_switch
 
-        status = "enabled" if clock.auto_switch else "disabled"
+       # status = "enabled" if clock.auto_switch else "disabled"
 
-        await interaction.response.defer()
-        await safe_edit_message(clock.message, embed=build_embed(clock), view=self)
+       # await interaction.response.defer()
+       # await safe_edit_message(clock.message, embed=build_embed(clock), view=self)
 
-        if clock.rcon_client and clock.ingame_messages:
-            await clock.rcon_client.send_message(f"🤖 Auto-switch {status}")
+       # if clock.rcon_client and clock.ingame_messages:
+        #    await clock.rcon_client.send_message(f"🤖 Auto-switch {status}")
 
-    @discord.ui.button(label="💬 Msgs", style=discord.ButtonStyle.secondary)
-    async def toggle_ingame_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not user_is_admin(interaction):
-            return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
+   # @discord.ui.button(label="💬 Msgs", style=discord.ButtonStyle.secondary)
+   # async def toggle_ingame_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    if not user_is_admin(interaction):
+     #       return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
 
-        clock = clocks[self.channel_id]
-        clock.ingame_messages = not clock.ingame_messages
+      #  clock = clocks[self.channel_id]
+       # clock.ingame_messages = not clock.ingame_messages
 
-        status = "ON" if clock.ingame_messages else "OFF"
+       # status = "ON" if clock.ingame_messages else "OFF"
 
-        await interaction.response.defer()
-        await safe_edit_message(clock.message, embed=build_embed(clock), view=self)
-        await interaction.followup.send(f"💬 In-game messages: **{status}**", ephemeral=True)
+      #  await interaction.response.defer()
+       # await safe_edit_message(clock.message, embed=build_embed(clock), view=self)
+      #  await interaction.followup.send(f"💬 In-game messages: **{status}**", ephemeral=True)
 
-    @discord.ui.button(label="📊 Stats", style=discord.ButtonStyle.secondary)
-    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        clock = clocks[self.channel_id]
-        await interaction.response.defer(ephemeral=True)
+  #  @discord.ui.button(label="📊 Stats", style=discord.ButtonStyle.secondary)
+   # async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    clock = clocks[self.channel_id]
+     #   await interaction.response.defer(ephemeral=True)
         
-        if not clock.rcon_client:
-            return await interaction.followup.send("❌ RCON not connected.", ephemeral=True)
+      #  if not clock.rcon_client:
+       #     return await interaction.followup.send("❌ RCON not connected.", ephemeral=True)
         
-        try:
-            await clock.update_from_game()
-            game_info = clock.get_game_info()
+      #  try:
+       #     await clock.update_from_game()
+        #    game_info = clock.get_game_info()
             
-            embed = discord.Embed(title="📊 Live Match Stats", color=0x00ff00)
-            embed.add_field(name="🗺️ Map", value=game_info['map'], inline=True)
-            embed.add_field(name="👥 Players", value=f"{game_info['players']}/100", inline=True)
-            embed.add_field(name="🔄 Point Switches", value=str(len(clock.switches)), inline=True)
+         #   embed = discord.Embed(title="📊 Live Match Stats", color=0x00ff00)
+          #  embed.add_field(name="🗺️ Map", value=game_info['map'], inline=True)
+          #  embed.add_field(name="👥 Players", value=f"{game_info['players']}/100", inline=True)
+          #  embed.add_field(name="🔄 Point Switches", value=str(len(clock.switches)), inline=True)
             
             # Control time breakdown
             allies_time = clock.total_time('A')
