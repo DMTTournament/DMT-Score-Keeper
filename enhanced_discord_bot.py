@@ -817,44 +817,44 @@ class TimerControls(discord.ui.View):
           #  embed.add_field(name="🔄 Point Switches", value=str(len(clock.switches)), inline=True)
             
             # Control time breakdown
-            allies_time = clock.total_time('A')
-            axis_time = clock.total_time('B')
-            total_control = allies_time + axis_time
+            # allies_time = clock.total_time('A')
+            # axis_time = clock.total_time('B')
+            # total_control = allies_time + axis_time
             
-            if total_control > 0:
-                allies_percent = (allies_time / total_control) * 100
-                axis_percent = (axis_time / total_control) * 100
-                
-                embed.add_field(name="🇺🇸 Allies Control", value=f"{allies_percent:.1f}%", inline=True)
-                embed.add_field(name="🇩🇪 Axis Control", value=f"{axis_percent:.1f}%", inline=True)
+           # if total_control > 0:
+             #   allies_percent = (allies_time / total_control) * 100
+            #    axis_percent = (axis_time / total_control) * 100
+             #   
+              #  embed.add_field(name="🇺🇸 Allies Control", value=f"{allies_percent:.1f}%", inline=True)
+              #  embed.add_field(name="🇩🇪 Axis Control", value=f"{axis_percent:.1f}%", inline=True)
             
-            embed.add_field(name="🤖 Auto-Switch", value="On" if clock.auto_switch else "Off", inline=True)
-            embed.add_field(name="📡 Last Update", value=game_info['last_update'], inline=True)
+          #  embed.add_field(name="🤖 Auto-Switch", value="On" if clock.auto_switch else "Off", inline=True)
+          #  embed.add_field(name="📡 Last Update", value=game_info['last_update'], inline=True)
             
-            await interaction.followup.send(embed=embed, ephemeral=True)
+           # await interaction.followup.send(embed=embed, ephemeral=True)
             
-        except Exception as e:
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+      #  except Exception as e:
+          #  await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
 
-    @discord.ui.button(label="↺ Reset", style=discord.ButtonStyle.primary)
-    async def reset_timer(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not user_is_admin(interaction):
-            return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
+   # @discord.ui.button(label="↺ Reset", style=discord.ButtonStyle.primary)
+   # async def reset_timer(self, interaction: discord.Interaction, button: discord.ui.Button):
+     #   if not user_is_admin(interaction):
+         #   return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
 
-        old_clock = clocks[self.channel_id]
-        if old_clock.rcon_client:
-            await old_clock.rcon_client.__aexit__(None, None, None)
+       # old_clock = clocks[self.channel_id]
+       # if old_clock.rcon_client:
+         #   await old_clock.rcon_client.__aexit__(None, None, None)
 
-        clocks[self.channel_id] = ClockState()
-        clock = clocks[self.channel_id]
-        view = StartControls(self.channel_id)
+     #   clocks[self.channel_id] = ClockState()
+      #  clock = clocks[self.channel_id]
+      #  view = StartControls(self.channel_id)
 
-        await interaction.response.defer()
-        embed = build_embed(clock)
-        await interaction.followup.send(embed=embed, view=view)
-        clock.message = await interaction.original_response()
+     #   await interaction.response.defer()
+     #   embed = build_embed(clock)
+     #   await interaction.followup.send(embed=embed, view=view)
+      #  clock.message = await interaction.original_response()
 
-    @discord.ui.button(label="⏹️ Stop", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="⏹️ Manually Stop", style=discord.ButtonStyle.danger)
     async def stop_timer(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not user_is_admin(interaction):
             return await interaction.response.send_message("❌ Admin role required.", ephemeral=True)
