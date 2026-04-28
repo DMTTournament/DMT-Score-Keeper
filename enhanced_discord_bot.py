@@ -1230,13 +1230,13 @@ async def auto_stop_match(clock: ClockState, game_info: dict):
 
         # Final DMT scores
         embed.add_field(
-            name=f"🇺🇸 {team_a_name} - Final DMT",
-            value=f"**{allied_scores['total_dmt']:,.1f} DMT**\nCombat: {allied_scores['combat_total']:,.0f}\nCap: {allied_scores['cap_score']:,.1f} ({clock.format_time(clock.time_a)})",
+            name=f"🇺🇸 {team_a_name}",
+            value=f"TOTAL: **{allied_scores['total_dmt']:,.1f}**\nCombat Score: {allied_scores['combat_total']:,.0f}\nCap Score: {allied_scores['cap_score']:,.1f} ({clock.format_time(clock.time_a)})",
             inline=True
         )
         embed.add_field(
-            name=f"🇩🇪 {team_b_name} - Final DMT",
-            value=f"**{axis_scores['total_dmt']:,.1f} DMT**\nCombat: {axis_scores['combat_total']:,.0f}\nCap: {axis_scores['cap_score']:,.1f} ({clock.format_time(clock.time_b)})",
+            name=f"🇩🇪 {team_b_name}",
+            value=f"TOTAL: **{axis_scores['total_dmt']:,.1f}**\nCombat Score: {axis_scores['combat_total']:,.0f}\nCap Score: {axis_scores['cap_score']:,.1f} ({clock.format_time(clock.time_b)})",
             inline=True
         )
 
@@ -1250,7 +1250,7 @@ async def auto_stop_match(clock: ClockState, game_info: dict):
         else:
             winner = "🤝 **Perfect Draw**\n*Equal DMT scores*"
 
-        embed.add_field(name="🎯 DMT Winner", value=winner, inline=False)
+        embed.add_field(name="🎯 Winner", value=winner, inline=False)
         embed.add_field(name="🔄 Total Switches", value=str(len(clock.switches)), inline=True)
 
         # Update the message with final results
