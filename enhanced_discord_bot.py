@@ -307,7 +307,7 @@ class ClockState:
         # DMT Scoring (always enabled)
         self.tournament_mode = True  # Always use DMT scoring
         self.team_names = {'allied': 'Allies', 'axis': 'Axis'}
-        self.ingame_messages = True  # Toggle for sending messages to players in-game
+        self.ingame_messages = False  # Toggle for sending messages to players in-game
         # Squad mapping: which squads represent which crews
         self.squad_config = {
             'allied': {
@@ -606,7 +606,7 @@ async def safe_edit_message(message, **kwargs):
 def build_embed(clock: ClockState):
     """Build Discord embed with DMT Scoring"""
     embed = discord.Embed(
-        title="⚙️ DMT Score Keeper",
+        title="⚙️ DMT Score Keeper ⚙️",
         description="",
         color=0xFFD700  # Gold color
     )
@@ -668,8 +668,8 @@ def build_embed(clock: ClockState):
     if axis_scores['held_mid_bonus']:
         dmt_axis += f" | Held Mid: +285"
 
-    embed.add_field(name=f"🇺🇸 {allied_name} DMT", value=dmt_allied, inline=True)
-    embed.add_field(name=f"🇩🇪 {axis_name} DMT", value=dmt_axis, inline=True)
+    embed.add_field(name=f"🇺🇸 {allied_name}", value=dmt_allied, inline=True)
+    embed.add_field(name=f"🇩🇪 {axis_name}", value=dmt_axis, inline=True)
 
     # Show leader
     if allied_scores['total_dmt'] > axis_scores['total_dmt']:
@@ -739,7 +739,7 @@ class StartControls(discord.ui.View):
         else:
             await interaction.edit_original_response(content="✅ Match started (RCON connection failed)")
 
-    @discord.ui.button(label="🔗 Test RCON", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔗 Test Connection", style=discord.ButtonStyle.secondary)
     async def test_rcon(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
 
@@ -747,11 +747,11 @@ class StartControls(discord.ui.View):
             test_client = HLLRconV2Client()
             await test_client.connect()
             await test_client.close()
-            embed = discord.Embed(title="🟢 RCON V2 Test - SUCCESS", color=0x00ff00)
+            embed = discord.Embed(title="🟢 Connection Test - SUCCESS", color=0x00ff00)
             embed.add_field(name="Status", value="✅ Connected & authenticated", inline=False)
             embed.add_field(name="Host",   value=f"{os.getenv('RCON_HOST')}:{os.getenv('RCON_PORT', '7779')}", inline=True)
         except Exception as e:
-            embed = discord.Embed(title="🔴 RCON V2 Test - FAILED", color=0xff0000)
+            embed = discord.Embed(title="🔴 Connection Test - FAILED", color=0xff0000)
             embed.add_field(name="Error", value=str(e)[:1000], inline=False)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
