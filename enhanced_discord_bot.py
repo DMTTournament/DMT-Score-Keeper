@@ -606,8 +606,7 @@ async def safe_edit_message(message, **kwargs):
 def build_embed(clock: ClockState):
     """Build Discord embed with DMT Scoring"""
     embed = discord.Embed(
-        title="🏆 HLL Tank Overwatch - DMT Scoring 🏆",
-        description="**Win by highest DMT Total Score!**",
+        title="⚙️ DMT Score Keeper",
         color=0xFFD700  # Gold color
     )
 
@@ -619,15 +618,15 @@ def build_embed(clock: ClockState):
 
     # Add server game time instead of match duration
     if game_info['game_time'] > 0:
-        embed.description += f"\n⏰ **Server Game Time:** `{clock.format_time(game_info['game_time'])}`"
+        embed.description += f"\n⏰ **Game Time:** `{clock.format_time(game_info['game_time'])}`"
     
     # Get live status for both teams
     allies_status = clock.get_live_status('A')
     axis_status = clock.get_live_status('B')
     
     # Build team information focused on TIME CONTROL
-    allies_value = f"**Control Time:** `{clock.format_time(allies_status['total_time'])}`\n**Status:** {allies_status['status']}"
-    axis_value = f"**Control Time:** `{clock.format_time(axis_status['total_time'])}`\n**Status:** {axis_status['status']}"
+    allies_value = f"**Cap Time:** `{clock.format_time(allies_status['total_time'])}`\n**Status:** {allies_status['status']}"
+    axis_value = f"**Cap Time:** `{clock.format_time(axis_status['total_time'])}`\n**Status:** {axis_status['status']}"
     
     # Add current session info for active team
     if allies_status['is_active'] and allies_status['current_session'] > 0:
@@ -654,22 +653,22 @@ def build_embed(clock: ClockState):
     axis_scores = clock.calculate_dmt_score('axis')
 
     # Show DMT scores
-    dmt_allied = f"**DMT Score: {allied_scores['total_dmt']:,.1f}**\n"
+    dmt_allied = f"**TOTAL SCORE: {allied_scores['total_dmt']:,.1f}**\n"
     dmt_allied += f"Combat: {allied_scores['combat_total']:,.0f} | Cap: {allied_scores['cap_score']:,.1f}"
     if allied_scores['first_cap_bonus']:
         dmt_allied += f" | First Cap: +285"
     if allied_scores['held_mid_bonus']:
         dmt_allied += f" | Held Mid: +285"
 
-    dmt_axis = f"**DMT Score: {axis_scores['total_dmt']:,.1f}**\n"
+    dmt_axis = f"**TOTAL SCORE: {axis_scores['total_dmt']:,.1f}**\n"
     dmt_axis += f"Combat: {axis_scores['combat_total']:,.0f} | Cap: {axis_scores['cap_score']:,.1f}"
     if axis_scores['first_cap_bonus']:
         dmt_axis += f" | First Cap: +285"
     if axis_scores['held_mid_bonus']:
         dmt_axis += f" | Held Mid: +285"
 
-    embed.add_field(name=f"🏆 {allied_name} DMT", value=dmt_allied, inline=True)
-    embed.add_field(name=f"🏆 {axis_name} DMT", value=dmt_axis, inline=True)
+    embed.add_field(name=f"🇺🇸 {allied_name} DMT", value=dmt_allied, inline=True)
+    embed.add_field(name=f"🇩🇪 {axis_name} DMT", value=dmt_axis, inline=True)
 
     # Show leader
     if allied_scores['total_dmt'] > axis_scores['total_dmt']:
