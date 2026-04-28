@@ -607,7 +607,7 @@ def build_embed(clock: ClockState):
     """Build Discord embed with DMT Scoring"""
     embed = discord.Embed(
         title="⚙️ DMT Score Keeper",
-        descripton="",
+        description="",
         color=0xFFD700  # Gold color
     )
 
