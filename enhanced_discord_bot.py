@@ -48,6 +48,19 @@ FAST_POLL_THRESHOLD = 20      # Switch to 2-second polling within this many seco
 MESSAGE_TRUNCATE_LENGTH = 1900
 MIN_UPDATE_INTERVAL = 5
 MAX_UPDATE_INTERVAL = 300
+STALE_DATA_SECONDS = 90       # game data older than this is flagged in the embed
+
+# Errors that mean the RCON socket is dead and has to be rebuilt.
+# These MUST be allowed to propagate up to the reconnect handlers — swallowing
+# them is what used to freeze the bot permanently on 'Connection reset by peer'.
+RCON_TRANSPORT_ERRORS = (
+    ConnectionError,               # incl. ConnectionResetError (Errno 104)
+    OSError,                       # incl. broken pipe (32), timed out (110)
+    asyncio.IncompleteReadError,   # peer closed mid-packet
+    asyncio.TimeoutError,          # not an OSError before Python 3.11
+    json.JSONDecodeError,          # garbage body = desynced stream
+    struct.error,                  # unparseable header = desynced stream
+)
 
 intents = discord.Intents.default()
 intents.message_content = False
@@ -76,6 +89,7 @@ class HLLRconV2Client:
         self.auth_token = ''
         self._msg_id    = 0
         self._lock      = asyncio.Lock()
+        self.connected  = False   # only True between a successful login and a failure
 
     # ── Internal protocol helpers ────────────────────────────────────────────
 
@@ -119,6 +133,7 @@ class HLLRconV2Client:
     # ── Connection lifecycle ─────────────────────────────────────────────────
 
     async def connect(self):
+        self.connected = False
         self.reader, self.writer = await asyncio.wait_for(
             asyncio.open_connection(self.host, self.port),
             timeout=self.timeout
@@ -144,6 +159,7 @@ class HLLRconV2Client:
         if resp.get('statusCode', 0) != 200:
             raise ConnectionError(f"RCON login failed: {resp.get('statusMessage')}")
         self.auth_token = resp.get('contentBody', '')
+        self.connected  = True
         logger.info(f"Connected to HLL Server at {self.host}:{self.port}")
 
     async def __aenter__(self):
@@ -154,6 +170,7 @@ class HLLRconV2Client:
         await self.close()
 
     async def close(self):
+        self.connected = False
         if self.writer:
             try:
                 self.writer.close()
@@ -164,15 +181,25 @@ class HLLRconV2Client:
     # ── Command execution ────────────────────────────────────────────────────
 
     async def command(self, name: str, content_body=None) -> dict:
-        """Send an authenticated command and return the full response dict."""
+        """Send an authenticated command and return the full response dict.
+
+        A transport failure marks the client dead and re-raises. A timeout is
+        treated the same way on purpose: _recv() reads whatever packet arrives
+        next without matching request ids, so a late response would desync the
+        stream for good. Rebuilding the connection is the only safe recovery.
+        """
         async with self._lock:
-            await self._send({
-                "authToken":   self.auth_token,
-                "version":     2,
-                "name":        name,
-                "contentBody": content_body if content_body is not None else ""
-            })
-            return await self._recv()
+            try:
+                await self._send({
+                    "authToken":   self.auth_token,
+                    "version":     2,
+                    "name":        name,
+                    "contentBody": content_body if content_body is not None else ""
+                })
+                return await self._recv()
+            except RCON_TRANSPORT_ERRORS:
+                self.connected = False
+                raise
 
     @staticmethod
     def _parse_body(raw):
@@ -243,8 +270,17 @@ class HLLRconV2Client:
                         'platoon': body.get('Platoon', body.get('platoon', '')) or '',
                         'combat':  combat,
                     })
+                except RCON_TRANSPORT_ERRORS:
+                    raise      # socket is gone; do NOT return half a roster
                 except Exception as e:
                     logger.warning(f"Player detail error {p.get('name')}: {e}")
+
+            # Roster non-empty but no detail came back at all: the data would
+            # zero out every combat score, so treat it as a failed poll.
+            if raw_list and not players:
+                raise ConnectionError(
+                    f"No player detail returned for any of {len(raw_list)} players"
+                )
 
             return {
                 'allied_score':   int(session.get('alliedScore',       0)),
@@ -256,6 +292,11 @@ class HLLRconV2Client:
                 'players':        players,
                 'timestamp':      datetime.datetime.now(timezone.utc),
             }
+        except RCON_TRANSPORT_ERRORS as e:
+            # Must propagate: the callers' reconnect handlers depend on it.
+            logger.warning(f"RCON connection lost while reading game state: {e}")
+            self.connected = False
+            raise
         except Exception as e:
             logger.error(f"Error getting game state: {e}")
             return None
@@ -316,6 +357,12 @@ class ClockState:
         self._first_update_done = False
         self._fast_polling = False
         self._lock = asyncio.Lock()
+        self._reconnect_delay   = 5     # seconds, doubles on each failed retry
+        self._next_reconnect_at = None
+        # Who held mid when the match ended. Both stop paths clear `active`
+        # before scoring, which zeroed the held-mid bonus in every final
+        # result even though it showed correctly all match long.
+        self.final_holder = None
 
         # DMT Scoring (always enabled)
         self.tournament_mode = True  # Always use DMT scoring
@@ -411,6 +458,34 @@ class ClockState:
             self.rcon_client = None
             return False
     
+    async def ensure_rcon(self):
+        """Make sure the RCON socket is alive, rebuilding it if not.
+
+        connect_rcon() sets rcon_client to None when it fails, so callers must
+        never gate the retry on rcon_client being truthy — that is exactly how
+        a single reset used to kill the bot for the rest of the match.
+        """
+        if self.is_rcon_connected():
+            self._reconnect_delay   = 5
+            self._next_reconnect_at = None
+            return True
+
+        now = datetime.datetime.now(timezone.utc)
+        if self._next_reconnect_at and now < self._next_reconnect_at:
+            return False   # backing off
+
+        logger.info("RCON down — attempting to reconnect")
+        if await self.connect_rcon():
+            self._reconnect_delay   = 5
+            self._next_reconnect_at = None
+            logger.info("RCON reconnected")
+            return True
+
+        self._reconnect_delay   = min(self._reconnect_delay * 2, 60)
+        self._next_reconnect_at = now + timedelta(seconds=self._reconnect_delay)
+        logger.warning(f"RCON reconnect failed; next attempt in {self._reconnect_delay}s")
+        return False
+
     async def update_from_game(self):
         """Update from RCON V2 game data."""
         if not self.rcon_client:
@@ -431,6 +506,8 @@ class ClockState:
                     'axis':   data.get('axis_score',   0),
                 }
                 self._first_update_done = True
+        except RCON_TRANSPORT_ERRORS:
+            raise      # handled by match_updater / fast_poll_end -> reconnect
         except Exception as e:
             logger.error(f"Error updating from game: {e}")
 
@@ -502,16 +579,49 @@ class ClockState:
             
         logger.info(f"Auto-switched to team {team}: {reason}")
     
+    def is_rcon_connected(self):
+        """True only if the socket is actually alive right now."""
+        return bool(self.rcon_client and self.rcon_client.connected)
+
+    def data_age_seconds(self):
+        """Seconds since the last successful poll, or None if never polled."""
+        if not self.last_update:
+            return None
+        return (datetime.datetime.now(timezone.utc) - self.last_update).total_seconds()
+
     def get_game_info(self):
-        """Get formatted game information directly from RCON V2 data."""
+        """Get formatted game information directly from RCON V2 data.
+
+        connection_status reflects the LIVE socket, never the presence of stale
+        data. Callers gate auto-stop on it, so reporting 'Connected' off a
+        frozen snapshot would end matches on numbers minutes out of date.
+        """
+        age    = self.data_age_seconds()
+        alive  = self.is_rcon_connected()
+        stale  = age is not None and age > STALE_DATA_SECONDS
+
         if not self.game_data:
-            return {'map': 'No Connection', 'players': 0, 'game_time': 0, 'connection_status': 'Disconnected'}
+            return {
+                'map': 'No Connection', 'players': 0, 'game_time': 0,
+                'connection_status': 'Connected' if alive else 'Disconnected',
+                'last_update': 'Never', 'stale': True, 'data_age': age,
+            }
+
+        if alive and not stale:
+            status = 'Connected'
+        elif alive:
+            status = 'Stale'
+        else:
+            status = 'Disconnected'
+
         return {
             'map':               self.game_data.get('map', 'Unknown'),
             'players':           self.game_data.get('allied_players', 0) + self.game_data.get('axis_players', 0),
             'game_time':         self.game_data.get('time_remaining', 0),
-            'connection_status': 'Connected',
+            'connection_status': status,
             'last_update':       self.last_update.strftime('%H:%M:%S') if self.last_update else 'Never',
+            'stale':             stale or not alive,
+            'data_age':          age,
         }
 
     def format_time(self, secs):
@@ -576,10 +686,13 @@ class ClockState:
             if (team_key == 'allied' and first_team == 'A') or (team_key == 'axis' and first_team == 'B'):
                 first_cap_bonus = 285
 
-        # Held mid at end bonus (285) — team currently holding the point
+        # Held mid bonus (285) — whoever holds the point, or held it at the
+        # final whistle. The final_holder fallback is what makes this bonus
+        # survive into the finished score.
+        holder = self.active or self.final_holder
         held_mid_bonus = 0
-        if self.active:
-            if (team_key == 'allied' and self.active == 'A') or (team_key == 'axis' and self.active == 'B'):
+        if holder:
+            if (team_key == 'allied' and holder == 'A') or (team_key == 'axis' and holder == 'B'):
                 held_mid_bonus = 285
 
         total_dmt = combat_total + cap_score + first_cap_bonus + held_mid_bonus
@@ -696,8 +809,16 @@ def build_embed(clock: ClockState):
 
     embed.add_field(name="📊 Current Leader", value=leader_text, inline=False)
     
-    # Footer with connection status
-    connection_status = f"🟢 RCON Connected" if clock.rcon_client else "🔴 RCON Disconnected"
+    # Footer with connection status — driven by the live socket, not by the
+    # presence of a stale snapshot.
+    status_label = game_info.get('connection_status', 'Disconnected')
+    if status_label == 'Connected':
+        connection_status = "🟢 RCON Connected"
+    elif status_label == 'Stale':
+        age = game_info.get('data_age') or 0
+        connection_status = f"🟡 RCON Stale ({int(age)}s)"
+    else:
+        connection_status = "🔴 RCON Disconnected"
     auto_status = " | 🤖 Auto ON" if clock.auto_switch else " | 🤖 Auto OFF"
     msg_status = " | 💬 Msgs ON" if clock.ingame_messages else " | 💬 Msgs OFF"
 
@@ -883,6 +1004,9 @@ class TimerControls(discord.ui.View):
                 elif clock.active == "B":
                     clock.time_b += elapsed
 
+            # Must happen BEFORE active is cleared, or the held-mid bonus
+            # scores as zero in the final result.
+            clock.final_holder = clock.active or clock.final_holder
             clock.active = None
             clock.started = False
             clock._fast_polling = False
@@ -1130,22 +1254,33 @@ async def fast_poll_end(channel_id):
     logger.info("Fast poll started — match ending soon")
     while clock.started and clock._fast_polling:
         try:
-            if clock.rcon_client:
+            if await clock.ensure_rcon():
                 try:
                     await clock.update_from_game()
+                except RCON_TRANSPORT_ERRORS as e:
+                    logger.warning(f"Fast poll: RCON lost ({e}) — reconnecting")
                 except Exception as e:
-                    logger.warning(f"Fast poll RCON error: {e}")
-                    await clock.connect_rcon()
+                    logger.error(f"Fast poll RCON error: {e}")
 
             game_info = clock.get_game_info()
             time_left  = game_info['game_time']
 
             await safe_edit_message(clock.message, embed=build_embed(clock))
 
+            # Only end the match on a LIVE reading. Ending on a frozen snapshot
+            # would post a score built from minutes-old data.
             if game_info['connection_status'] == 'Connected' and time_left <= GAME_END_THRESHOLD:
                 logger.info(f"Fast poll: time={time_left}s — triggering match end")
                 clock._fast_polling = False
                 await auto_stop_match(clock, game_info)
+                return
+
+            # Clock climbed back out of the endgame window (new round, or the
+            # first good reading after a reconnect) — hand back to the slow loop
+            # instead of spinning here at 2s forever.
+            if game_info['connection_status'] == 'Connected' and time_left > FAST_POLL_THRESHOLD:
+                logger.info(f"Fast poll: time back up to {time_left}s — resuming normal polling")
+                clock._fast_polling = False
                 return
         except Exception as e:
             logger.error(f"Error in fast poll: {e}")
@@ -1168,13 +1303,14 @@ async def match_updater(channel_id):
         return
 
     try:
-        # Update from RCON V2 if connected
-        if clock.rcon_client:
+        # Rebuild the socket first if it died, then poll.
+        if await clock.ensure_rcon():
             try:
                 await clock.update_from_game()
+            except RCON_TRANSPORT_ERRORS as e:
+                logger.warning(f"RCON lost during update ({e}) — reconnecting next tick")
             except Exception as e:
-                logger.warning(f"RCON update failed, attempting reconnect: {e}")
-                await clock.connect_rcon()
+                logger.error(f"RCON update failed: {e}")
 
         game_info = clock.get_game_info()
         time_left  = game_info['game_time']
@@ -1206,6 +1342,9 @@ async def auto_stop_match(clock: ClockState, game_info: dict):
                 elif clock.active == "B":
                     clock.time_b += elapsed
 
+            # Must happen BEFORE active is cleared, or the held-mid bonus
+            # scores as zero in the final result.
+            clock.final_holder = clock.active or clock.final_holder
             clock.active = None
             clock.started = False
             clock._fast_polling = False
